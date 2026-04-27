@@ -1,10 +1,12 @@
 import { ArrowLeft, AlertTriangle, ShieldCheck, Bell } from 'lucide-react';
+import { markAlertRead } from '../services/api';
 import type { Alert } from '../types';
 
 interface AlertsProps {
   alerts: Alert[];
   onBack?: () => void;
   showBack?: boolean;
+  onAlertRead?: () => void;
 }
 
 function getAlertInfo(level: Alert['level']) {
@@ -26,12 +28,23 @@ function getLevelLabel(level: Alert['level']) {
   }
 }
 
-export default function Alerts({ alerts, onBack, showBack = false }: AlertsProps) {
+export default function Alerts({ alerts, onBack, showBack = false, onAlertRead }: AlertsProps) {
   const sortedAlerts = [...alerts].sort((a, b) => {
     // Sort by read status (unread first) then by date (newest first)
     if (a.read !== b.read) return a.read ? 1 : -1;
     return 0;
   });
+
+  const handleAlertClick = async (alert: Alert) => {
+    if (!alert.read) {
+      try {
+        await markAlertRead(alert.id);
+        if (onAlertRead) onAlertRead();
+      } catch (err) {
+        console.error('Error marking alert as read:', err);
+      }
+    }
+  };
 
   return (
     <div className="flex-1 flex flex-col bg-cg-cream overflow-hidden">
@@ -71,7 +84,8 @@ export default function Alerts({ alerts, onBack, showBack = false }: AlertsProps
               return (
                 <div
                   key={alert.id}
-                  className={`w-full bg-white rounded-2xl p-4 shadow-sm border-l-4 ${info.borderColor} ${!alert.read ? info.bgColor : ''}`}
+                  onClick={() => handleAlertClick(alert)}
+                  className={`w-full bg-white rounded-2xl p-4 shadow-sm border-l-4 ${info.borderColor} ${!alert.read ? info.bgColor : ''} ${!alert.read ? 'cursor-pointer active:scale-[0.98] transition-transform' : ''}`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-10 h-10 ${info.color} rounded-xl flex items-center justify-center shrink-0`}>
@@ -91,7 +105,7 @@ export default function Alerts({ alerts, onBack, showBack = false }: AlertsProps
                       {!alert.read && (
                         <div className="mt-3 flex items-center gap-1.5">
                           <span className="w-2 h-2 bg-cg-red rounded-full animate-pulse" />
-                          <span className="text-xs font-bold text-cg-red">No leída</span>
+                          <span className="text-xs font-bold text-cg-red">Toca para marcar como leída</span>
                         </div>
                       )}
                     </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import PhoneFrame from './components/PhoneFrame';
 import BottomNav from './components/BottomNav';
 import ReportProblemModal from './components/ReportProblemModal';
@@ -9,32 +9,113 @@ import TrapDetail from './pages/TrapDetail';
 import Alerts from './pages/Alerts';
 import Profile from './pages/Profile';
 import AddTrapForm from './pages/AddTrapForm';
-import { farmer as mockFarmer, traps as initialTraps, alerts as initialAlerts } from './data/mock';
+import { hasToken, clearToken, getMe, getTraps, getTrap, getAlerts } from './services/api';
 import type { Trap, Alert, Farmer } from './types';
 
 type Screen = 'splash' | 'home' | 'traps' | 'trapDetail' | 'alerts' | 'profile' | 'addTrap';
 
+const emptyFarmer: Farmer = {
+  name: '',
+  farmName: '',
+  municipality: '',
+  department: '',
+  hectares: 0,
+  cooperative: null,
+  activeTraps: 0,
+  totalTraps: 0,
+};
+
 export default function App() {
-  const [screen, setScreen] = useState<Screen>('splash');
+  const [screen, setScreen] = useState<Screen>(hasToken() ? 'home' : 'splash');
   const [selectedTrap, setSelectedTrap] = useState<Trap | null>(null);
   const [currentTab, setCurrentTab] = useState('home');
-  const [traps, setTraps] = useState<Trap[]>(initialTraps);
-  const [alerts] = useState<Alert[]>(initialAlerts);
-  const [farmer, setFarmer] = useState<Farmer>(mockFarmer);
+  const [traps, setTraps] = useState<Trap[]>([]);
+  const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [farmer, setFarmer] = useState<Farmer>(emptyFarmer);
   const [reportModalOpen, setReportModalOpen] = useState(false);
   const [reportTrapName, setReportTrapName] = useState('');
+  const [reportTrapId, setReportTrapId] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const unreadAlerts = alerts.filter(a => !a.read).length;
 
-  const handleEnter = (name?: string, farmName?: string) => {
-    if (name) {
-      setFarmer((prev) => ({ ...prev, name, farmName: farmName || prev.farmName }));
+  // Load all data from API
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    try {
+      const [farmerData, trapsData, alertsData] = await Promise.all([
+        getMe(),
+        getTraps(),
+        getAlerts(),
+      ]);
+
+      setFarmer({
+        name: farmerData.name,
+        farmName: farmerData.farmName,
+        municipality: farmerData.municipality || '',
+        department: farmerData.department || '',
+        hectares: farmerData.hectares || 0,
+        cooperative: farmerData.cooperative || null,
+        activeTraps: farmerData.activeTraps || 0,
+        totalTraps: farmerData.totalTraps || 0,
+      });
+
+      // Map backend traps to frontend Trap type
+      setTraps(
+        trapsData.map((t: any) => ({
+          id: t._id,
+          name: t.name,
+          location: t.location,
+          status: t.status,
+          batteryLevel: t.batteryLevel,
+          lastDetection: t.lastDetection,
+          connectivity: t.connectivity,
+          weeklyActivity: t.weeklyActivity || [0, 0, 0, 0, 0, 0, 0],
+          lastAlerts: [], // loaded on detail
+        }))
+      );
+
+      setAlerts(
+        alertsData.map((a: any) => ({
+          id: a._id,
+          trapId: a.trapId,
+          trapName: a.trapName,
+          date: a.date,
+          time: a.time,
+          level: a.level,
+          message: a.message,
+          read: a.read,
+        }))
+      );
+    } catch (err) {
+      console.error('Error loading data:', err);
+      // If unauthorized, go to splash
+      clearToken();
+      setScreen('splash');
+    } finally {
+      setLoading(false);
     }
+  }, []);
+
+  // Auto-load data if token exists
+  useEffect(() => {
+    if (hasToken()) {
+      loadData().then(() => setScreen('home'));
+    }
+  }, [loadData]);
+
+  const handleEnter = async () => {
+    // Called after successful login/register in Splash
+    await loadData();
     setScreen('home');
     setCurrentTab('home');
   };
 
   const handleLogout = () => {
+    clearToken();
+    setFarmer(emptyFarmer);
+    setTraps([]);
+    setAlerts([]);
     setScreen('splash');
     setCurrentTab('home');
     setSelectedTrap(null);
@@ -45,6 +126,7 @@ export default function App() {
     switch (tab) {
       case 'home':
         setScreen('home');
+        loadData(); // refresh
         break;
       case 'traps':
         setScreen('traps');
@@ -52,6 +134,7 @@ export default function App() {
         break;
       case 'alerts':
         setScreen('alerts');
+        loadData(); // refresh alerts
         break;
       case 'profile':
         setScreen('profile');
@@ -59,9 +142,34 @@ export default function App() {
     }
   };
 
-  const handleViewTrapDetail = (trap: Trap) => {
-    setSelectedTrap(trap);
-    setScreen('trapDetail');
+  const handleViewTrapDetail = async (trap: Trap) => {
+    try {
+      const detail = await getTrap(trap.id);
+      const fullTrap: Trap = {
+        id: detail._id,
+        name: detail.name,
+        location: detail.location,
+        status: detail.status,
+        batteryLevel: detail.batteryLevel,
+        lastDetection: detail.lastDetection,
+        connectivity: detail.connectivity,
+        weeklyActivity: detail.weeklyActivity || [0, 0, 0, 0, 0, 0, 0],
+        lastAlerts: (detail.lastAlerts || []).map((a: any) => ({
+          id: a._id,
+          trapId: a.trapId,
+          trapName: a.trapName,
+          date: a.date,
+          time: a.time,
+          level: a.level,
+          message: a.message,
+          read: a.read,
+        })),
+      };
+      setSelectedTrap(fullTrap);
+      setScreen('trapDetail');
+    } catch (err) {
+      console.error('Error loading trap detail:', err);
+    }
   };
 
   const handleBackFromDetail = () => {
@@ -69,8 +177,10 @@ export default function App() {
     setCurrentTab('traps');
   };
 
-  const handleAddTrap = (newTrap: Trap) => {
-    setTraps((prev) => [...prev, newTrap]);
+  const handleAddTrap = async () => {
+    // Called after AddTrapForm successfully creates via API
+    // Refresh traps list
+    await loadData();
   };
 
   const handleOpenAddTrap = () => {
@@ -82,13 +192,24 @@ export default function App() {
     setCurrentTab('traps');
   };
 
-  const handleOpenReportProblem = (trapName: string) => {
+  const handleOpenReportProblem = (trapName: string, trapId?: string) => {
     setReportTrapName(trapName);
+    setReportTrapId(trapId || '');
     setReportModalOpen(true);
   };
 
   const showNav = screen !== 'splash' && screen !== 'trapDetail' && screen !== 'addTrap';
-  const activeTrap = selectedTrap ? traps.find((t) => t.id === selectedTrap.id) || selectedTrap : null;
+  const activeTrap = selectedTrap;
+
+  if (loading && screen === 'splash') {
+    return (
+      <PhoneFrame>
+        <div className="flex-1 flex items-center justify-center bg-cg-cream">
+          <div className="animate-pulse text-cg-medium font-bold text-lg">Cargando...</div>
+        </div>
+      </PhoneFrame>
+    );
+  }
 
   return (
     <PhoneFrame>
@@ -117,7 +238,7 @@ export default function App() {
         <TrapDetail
           trap={activeTrap}
           onBack={handleBackFromDetail}
-          onReportProblem={handleOpenReportProblem}
+          onReportProblem={(name) => handleOpenReportProblem(name, activeTrap.id)}
         />
       )}
 
@@ -125,6 +246,7 @@ export default function App() {
         <Alerts
           alerts={alerts}
           showBack={false}
+          onAlertRead={loadData}
         />
       )}
 
@@ -146,6 +268,7 @@ export default function App() {
       {reportModalOpen && (
         <ReportProblemModal
           trapName={reportTrapName}
+          trapId={reportTrapId}
           onClose={() => setReportModalOpen(false)}
         />
       )}

@@ -1,20 +1,58 @@
 import { useState } from 'react';
 import { Leaf } from 'lucide-react';
+import { login, register, setToken } from '../services/api';
 
 interface SplashProps {
-  onEnter: (name?: string, farmName?: string) => void;
+  onEnter: () => void;
 }
 
 export default function Splash({ onEnter }: SplashProps) {
-  const [showForm, setShowForm] = useState(false);
+  const [mode, setMode] = useState<'welcome' | 'login' | 'register'>('welcome');
   const [name, setName] = useState('');
   const [farmName, setFarmName] = useState('');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleCreateAccount = () => {
-    if (name.trim()) {
-      onEnter(name.trim(), farmName.trim() || 'Mi Finca');
-    } else {
+  const handleLogin = async () => {
+    if (!email.trim() || !password.trim()) {
+      setError('Completa todos los campos');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await login(email.trim(), password);
+      setToken(res.access_token);
       onEnter();
+    } catch (err: any) {
+      setError(err.message || 'Error al iniciar sesión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegister = async () => {
+    if (!name.trim() || !email.trim() || !password.trim() || !farmName.trim()) {
+      setError('Completa todos los campos');
+      return;
+    }
+    setLoading(true);
+    setError('');
+    try {
+      const res = await register({
+        name: name.trim(),
+        email: email.trim(),
+        password,
+        farmName: farmName.trim(),
+      });
+      setToken(res.access_token);
+      onEnter();
+    } catch (err: any) {
+      setError(err.message || 'Error al registrar');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -33,27 +71,72 @@ export default function Splash({ onEnter }: SplashProps) {
         <h1 className="text-3xl font-extrabold text-cg-dark mb-1 tracking-tight">
           Coffee Guard
         </h1>
-        <p className="text-base text-cg-medium/80 font-medium mb-10 text-center leading-snug">
+        <p className="text-base text-cg-medium/80 font-medium mb-8 text-center leading-snug">
           Protege tu cosecha<br/>de la broca del café
         </p>
       </div>
 
-      {!showForm ? (
+      {/* Error message */}
+      {error && (
+        <div className="w-full bg-cg-red/10 border border-cg-red/20 rounded-xl px-4 py-3 mb-3 z-10">
+          <p className="text-cg-red text-sm font-semibold text-center">{error}</p>
+        </div>
+      )}
+
+      {mode === 'welcome' && (
         <div className="w-full flex flex-col gap-3 z-10">
           <button
-            onClick={() => onEnter()}
+            onClick={() => { setMode('login'); setError(''); }}
             className="w-full bg-cg-medium text-cg-white font-bold text-lg py-4 rounded-2xl shadow-md active:scale-[0.98] transition-transform"
           >
             Ingresar
           </button>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={() => { setMode('register'); setError(''); }}
             className="w-full bg-cg-white text-cg-medium font-bold text-lg py-4 rounded-2xl border-2 border-cg-medium shadow-sm active:scale-[0.98] transition-transform"
           >
             Registrarme
           </button>
         </div>
-      ) : (
+      )}
+
+      {mode === 'login' && (
+        <div className="w-full flex flex-col gap-3 z-10">
+          <div className="bg-cg-white p-4 rounded-2xl shadow-sm border border-cg-cream mb-2">
+            <label className="text-sm font-semibold text-cg-dark block mb-1">Correo electrónico</label>
+            <input 
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Ej: carlos@coffeeguard.co" 
+              className="w-full bg-cg-cream/50 border border-cg-cream rounded-xl px-4 py-3 text-base text-cg-dark placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cg-medium"
+            />
+            <label className="text-sm font-semibold text-cg-dark block mt-3 mb-1">Contraseña</label>
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Tu contraseña" 
+              className="w-full bg-cg-cream/50 border border-cg-cream rounded-xl px-4 py-3 text-base text-cg-dark placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cg-medium"
+            />
+          </div>
+          <button
+            onClick={handleLogin}
+            disabled={loading}
+            className="w-full bg-cg-medium text-cg-white font-bold text-lg py-4 rounded-2xl shadow-md active:scale-[0.98] transition-transform disabled:opacity-60"
+          >
+            {loading ? 'Ingresando...' : 'Ingresar'}
+          </button>
+          <button
+            onClick={() => { setMode('welcome'); setError(''); }}
+            className="w-full bg-transparent text-cg-medium font-semibold text-base py-2"
+          >
+            Volver
+          </button>
+        </div>
+      )}
+
+      {mode === 'register' && (
         <div className="w-full flex flex-col gap-3 z-10">
           <div className="bg-cg-white p-4 rounded-2xl shadow-sm border border-cg-cream mb-2">
             <label className="text-sm font-semibold text-cg-dark block mb-1">Tu nombre</label>
@@ -62,6 +145,22 @@ export default function Splash({ onEnter }: SplashProps) {
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ej: Carlos Mora" 
+              className="w-full bg-cg-cream/50 border border-cg-cream rounded-xl px-4 py-3 text-base text-cg-dark placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cg-medium"
+            />
+            <label className="text-sm font-semibold text-cg-dark block mt-3 mb-1">Correo electrónico</label>
+            <input 
+              type="email" 
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="Ej: carlos@email.com" 
+              className="w-full bg-cg-cream/50 border border-cg-cream rounded-xl px-4 py-3 text-base text-cg-dark placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cg-medium"
+            />
+            <label className="text-sm font-semibold text-cg-dark block mt-3 mb-1">Contraseña</label>
+            <input 
+              type="password" 
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="Mínimo 6 caracteres" 
               className="w-full bg-cg-cream/50 border border-cg-cream rounded-xl px-4 py-3 text-base text-cg-dark placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cg-medium"
             />
             <label className="text-sm font-semibold text-cg-dark block mt-3 mb-1">Nombre de la finca</label>
@@ -74,13 +173,14 @@ export default function Splash({ onEnter }: SplashProps) {
             />
           </div>
           <button
-            onClick={handleCreateAccount}
-            className="w-full bg-cg-medium text-cg-white font-bold text-lg py-4 rounded-2xl shadow-md active:scale-[0.98] transition-transform"
+            onClick={handleRegister}
+            disabled={loading}
+            className="w-full bg-cg-medium text-cg-white font-bold text-lg py-4 rounded-2xl shadow-md active:scale-[0.98] transition-transform disabled:opacity-60"
           >
-            Crear cuenta
+            {loading ? 'Creando cuenta...' : 'Crear cuenta'}
           </button>
           <button
-            onClick={() => setShowForm(false)}
+            onClick={() => { setMode('welcome'); setError(''); }}
             className="w-full bg-transparent text-cg-medium font-semibold text-base py-2"
           >
             Volver

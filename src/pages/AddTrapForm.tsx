@@ -1,40 +1,39 @@
 import { useState } from 'react';
 import { ArrowLeft, Plus, MapPin, CheckCircle2 } from 'lucide-react';
-import type { Trap } from '../types';
+import { createTrap } from '../services/api';
 
 interface AddTrapFormProps {
   onBack: () => void;
-  onAddTrap: (trap: Trap) => void;
+  onAddTrap: () => void;
 }
 
 export default function AddTrapForm({ onBack, onAddTrap }: AddTrapFormProps) {
   const [name, setName] = useState('');
   const [location, setLocation] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!name.trim() || !location.trim()) return;
 
-    const newTrap: Trap = {
-      id: `trap-${Date.now()}`,
-      name: name.trim(),
-      location: location.trim(),
-      status: 'active',
-      batteryLevel: 100,
-      lastDetection: 'Recién instalada',
-      connectivity: 'online',
-      weeklyActivity: [0, 0, 0, 0, 0, 0, 0],
-      lastAlerts: [],
-    };
-
-    onAddTrap(newTrap);
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setName('');
-      setLocation('');
-      onBack();
-    }, 1500);
+    setLoading(true);
+    setError('');
+    try {
+      await createTrap({ name: name.trim(), location: location.trim() });
+      onAddTrap();
+      setSubmitted(true);
+      setTimeout(() => {
+        setSubmitted(false);
+        setName('');
+        setLocation('');
+        onBack();
+      }, 1500);
+    } catch (err: any) {
+      setError(err.message || 'Error al crear la trampa');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (submitted) {
@@ -69,6 +68,12 @@ export default function AddTrapForm({ onBack, onAddTrap }: AddTrapFormProps) {
       <div className="flex-1 overflow-y-auto px-5 pt-5 pb-4">
         <div className="bg-white rounded-2xl p-5 shadow-sm mb-4">
           <div className="flex flex-col gap-5">
+            {error && (
+              <div className="bg-cg-red/10 border border-cg-red/20 rounded-xl px-4 py-3">
+                <p className="text-cg-red text-sm font-semibold">{error}</p>
+              </div>
+            )}
+
             <div>
               <label className="text-sm font-bold text-cg-dark block mb-2">
                 Nombre de la trampa
@@ -114,11 +119,11 @@ export default function AddTrapForm({ onBack, onAddTrap }: AddTrapFormProps) {
 
         <button
           onClick={handleSubmit}
-          disabled={!name.trim() || !location.trim()}
+          disabled={!name.trim() || !location.trim() || loading}
           className="w-full bg-cg-medium text-cg-white font-bold text-lg py-4 rounded-2xl shadow-md active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus size={22} />
-          Guardar trampa
+          {loading ? 'Guardando...' : 'Guardar trampa'}
         </button>
 
         <button

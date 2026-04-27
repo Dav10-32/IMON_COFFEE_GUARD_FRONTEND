@@ -1,23 +1,40 @@
 import { useState } from 'react';
 import { X, MessageCircle, Send, CheckCircle2 } from 'lucide-react';
+import { createReport } from '../services/api';
 
 interface ReportProblemModalProps {
   trapName: string;
+  trapId: string;
   onClose: () => void;
 }
 
-export default function ReportProblemModal({ trapName, onClose }: ReportProblemModalProps) {
+export default function ReportProblemModal({ trapName, trapId, onClose }: ReportProblemModalProps) {
   const [problem, setProblem] = useState('');
   const [submitted, setSubmitted] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!problem.trim()) return;
-    setSubmitted(true);
-    setTimeout(() => {
-      setSubmitted(false);
-      setProblem('');
-      onClose();
-    }, 1800);
+    setLoading(true);
+    setError('');
+    try {
+      await createReport({
+        trapId,
+        trapName,
+        description: problem.trim(),
+      });
+      setSubmitted(true);
+      setTimeout(() => {
+        setSubmitted(false);
+        setProblem('');
+        onClose();
+      }, 1800);
+    } catch (err: any) {
+      setError(err.message || 'Error al enviar el reporte');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -62,6 +79,12 @@ export default function ReportProblemModal({ trapName, onClose }: ReportProblemM
                 Trampa: <span className="font-bold text-cg-dark">{trapName}</span>
               </p>
 
+              {error && (
+                <div className="bg-cg-red/10 border border-cg-red/20 rounded-xl px-4 py-2 mb-3">
+                  <p className="text-cg-red text-sm font-semibold">{error}</p>
+                </div>
+              )}
+
               <textarea
                 value={problem}
                 onChange={(e) => setProblem(e.target.value)}
@@ -71,11 +94,11 @@ export default function ReportProblemModal({ trapName, onClose }: ReportProblemM
 
               <button
                 onClick={handleSubmit}
-                disabled={!problem.trim()}
+                disabled={!problem.trim() || loading}
                 className="w-full mt-4 bg-cg-medium text-cg-white font-bold text-lg py-4 rounded-2xl shadow-md active:scale-[0.98] transition-transform flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send size={20} />
-                Enviar reporte
+                {loading ? 'Enviando...' : 'Enviar reporte'}
               </button>
             </div>
           </>
