@@ -21,13 +21,12 @@ export default function AddTrapForm({ onBack, onAddTrap }: AddTrapFormProps) {
     setError('');
     try {
       await createTrap({ name: name.trim(), location: location.trim() });
-      onAddTrap();
       setSubmitted(true);
       setTimeout(() => {
         setSubmitted(false);
         setName('');
         setLocation('');
-        onBack();
+        onAddTrap(); // Call after animation, this will reload data and navigate
       }, 1500);
     } catch (err: any) {
       setError(err.message || 'Error al crear la trampa');

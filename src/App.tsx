@@ -9,10 +9,11 @@ import TrapDetail from './pages/TrapDetail';
 import Alerts from './pages/Alerts';
 import Profile from './pages/Profile';
 import AddTrapForm from './pages/AddTrapForm';
+import Simulator from './pages/Simulator';
 import { hasToken, clearToken, getMe, getTraps, getTrap, getAlerts } from './services/api';
 import type { Trap, Alert, Farmer } from './types';
 
-type Screen = 'splash' | 'home' | 'traps' | 'trapDetail' | 'alerts' | 'profile' | 'addTrap';
+type Screen = 'splash' | 'home' | 'traps' | 'trapDetail' | 'alerts' | 'profile' | 'addTrap' | 'simulator';
 
 const emptyFarmer: Farmer = {
   name: '',
@@ -26,7 +27,12 @@ const emptyFarmer: Farmer = {
 };
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen>(hasToken() ? 'home' : 'splash');
+  // Check if URL is /simulator
+  const isSimulator = window.location.pathname === '/simulator';
+  
+  const [screen, setScreen] = useState<Screen>(
+    isSimulator ? 'simulator' : (hasToken() ? 'home' : 'splash')
+  );
   const [selectedTrap, setSelectedTrap] = useState<Trap | null>(null);
   const [currentTab, setCurrentTab] = useState('home');
   const [traps, setTraps] = useState<Trap[]>([]);
@@ -87,6 +93,11 @@ export default function App() {
           read: a.read,
         }))
       );
+      
+      // Only set screen to home if we're coming from splash
+      if (screen === 'splash') {
+        setScreen('home');
+      }
     } catch (err) {
       console.error('Error loading data:', err);
       // If unauthorized, go to splash
@@ -95,14 +106,14 @@ export default function App() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [screen]);
 
   // Auto-load data if token exists
   useEffect(() => {
-    if (hasToken()) {
-      loadData().then(() => setScreen('home'));
+    if (hasToken() && screen === 'splash' && !isSimulator) {
+      loadData();
     }
-  }, [loadData]);
+  }, [loadData, screen, isSimulator]);
 
   const handleEnter = async () => {
     // Called after successful login/register in Splash
@@ -179,8 +190,10 @@ export default function App() {
 
   const handleAddTrap = async () => {
     // Called after AddTrapForm successfully creates via API
-    // Refresh traps list
+    // Refresh traps list and navigate back
     await loadData();
+    setScreen('traps');
+    setCurrentTab('traps');
   };
 
   const handleOpenAddTrap = () => {
@@ -198,8 +211,13 @@ export default function App() {
     setReportModalOpen(true);
   };
 
-  const showNav = screen !== 'splash' && screen !== 'trapDetail' && screen !== 'addTrap';
+  const showNav = screen !== 'splash' && screen !== 'trapDetail' && screen !== 'addTrap' && screen !== 'simulator';
   const activeTrap = selectedTrap;
+
+  // Simulator screen (full screen, no frame)
+  if (screen === 'simulator') {
+    return <Simulator />;
+  }
 
   if (loading && screen === 'splash') {
     return (

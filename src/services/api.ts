@@ -1,4 +1,6 @@
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL 
+  ? `${import.meta.env.VITE_API_URL}/api`
+  : '/api';
 
 function getToken(): string | null {
   return localStorage.getItem('cg_token');
@@ -67,8 +69,10 @@ export async function register(data: {
   email: string;
   password: string;
   farmName: string;
-  municipality?: string;
-  department?: string;
+  municipality: string;
+  department: string;
+  hectares: number;
+  cooperative?: string;
 }): Promise<AuthResponse> {
   return request<AuthResponse>('/auth/register', {
     method: 'POST',
@@ -137,5 +141,14 @@ export async function createReport(data: {
   return request('/reports', {
     method: 'POST',
     body: JSON.stringify(data),
+  });
+}
+
+// ---- Simulator ----
+
+export async function simulateDetection(trapId: string, level: 'low' | 'medium' | 'high'): Promise<any> {
+  return request('/traps/simulate-detection', {
+    method: 'POST',
+    body: JSON.stringify({ trapId, level }),
   });
 }
